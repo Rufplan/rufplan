@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import Auth from './Auth';
 import ProfileEditor from './ProfileEditor';
+import ProsDirectory from './ProsDirectory';
 import RufplanApp from './Rufplan_v260';
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showPros, setShowPros] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -22,6 +24,7 @@ export default function App() {
 
   window._openLogin = () => setShowAuth(true);
   window._openProfile = () => setShowProfile(true);
+  window._openPros = () => setShowPros(true);
   window._currentUser = user;
   window._logout = async () => {
     await supabase.auth.signOut();
@@ -32,6 +35,7 @@ export default function App() {
     const timer = setTimeout(() => {
       const loginBtn = document.getElementById('nav-login-btn');
       const signupBtn = document.getElementById('nav-signup-btn');
+      const prosNav = document.getElementById('nav-professionals');
 
       if (loginBtn) {
         loginBtn.onclick = (e) => {
@@ -45,6 +49,13 @@ export default function App() {
           e.preventDefault();
           e.stopPropagation();
           setShowAuth(true);
+        };
+      }
+      if (prosNav) {
+        prosNav.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setShowPros(true);
         };
       }
 
@@ -70,6 +81,7 @@ export default function App() {
       <RufplanApp />
       {showAuth && <Auth onAuth={() => setShowAuth(false)} />}
       {showProfile && user && <ProfileEditor user={user} onClose={() => setShowProfile(false)} />}
+      {showPros && <ProsDirectory onClose={() => setShowPros(false)} />}
     </>
   );
 }
