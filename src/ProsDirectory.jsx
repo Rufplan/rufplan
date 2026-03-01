@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
+import ProProfile from './ProProfile';
 
 export default function ProsDirectory({ onClose }) {
   const [pros, setPros] = useState([]);
@@ -9,6 +10,7 @@ export default function ProsDirectory({ onClose }) {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  const [viewingProfile, setViewingProfile] = useState(null);
 
   const disciplines = ['All', 'Architecture', 'Engineering', 'Construction', 'Consultants'];
 
@@ -38,6 +40,17 @@ export default function ProsDirectory({ onClose }) {
 
   const photoUrl = (key) =>
     key ? `https://images.unsplash.com/${key}?w=400&h=400&fit=crop` : null;
+
+  // If viewing a profile, show that instead
+  if (viewingProfile) {
+    return (
+      <ProProfile
+        item={viewingProfile}
+        mode={mode}
+        onClose={() => setViewingProfile(null)}
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -240,42 +253,21 @@ export default function ProsDirectory({ onClose }) {
             }} />
 
             <div style={{ fontSize: 12, color: '#555', lineHeight: 1.6 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 1, color: '#888' }}>Location</span>
-                <span>{selected.location}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 1, color: '#888' }}>Discipline</span>
-                <span>{selected.discipline}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 1, color: '#888' }}>Specialty</span>
-                <span>{selected.subtype}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 1, color: '#888' }}>Experience</span>
-                <span>{selected.experience}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 1, color: '#888' }}>Rating</span>
-                <span>★ {selected.rating} ({selected.reviews} reviews)</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 1, color: '#888' }}>Projects</span>
-                <span>{selected.projects_count}</span>
-              </div>
-              {selected.size && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                  <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 1, color: '#888' }}>Team Size</span>
-                  <span>{selected.size}</span>
+              {[
+                ['Location', selected.location],
+                ['Discipline', selected.discipline],
+                ['Specialty', selected.subtype],
+                ['Experience', selected.experience],
+                ['Rating', `★ ${selected.rating} (${selected.reviews} reviews)`],
+                ['Projects', selected.projects_count],
+                ...(selected.size ? [['Team Size', selected.size]] : []),
+                ...(selected.founded ? [['Founded', selected.founded]] : []),
+              ].map(([label, value]) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 1, color: '#888' }}>{label}</span>
+                  <span>{value}</span>
                 </div>
-              )}
-              {selected.founded && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
-                  <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: 10, letterSpacing: 1, color: '#888' }}>Founded</span>
-                  <span>{selected.founded}</span>
-                </div>
-              )}
+              ))}
             </div>
 
             <div style={{ marginTop: 16 }}>
@@ -301,13 +293,16 @@ export default function ProsDirectory({ onClose }) {
             <div style={{
               display: 'flex', gap: 8, marginTop: 24,
             }}>
-              <button style={{
-                flex: 1, padding: 12, background: '#3ECFF7', color: '#0a0a0a',
-                fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13,
-                fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1,
-                border: 'none', cursor: 'pointer',
-              }}>
-                Contact
+              <button
+                onClick={() => setViewingProfile(selected)}
+                style={{
+                  flex: 1, padding: 12, background: '#3ECFF7', color: '#0a0a0a',
+                  fontFamily: "'Barlow Condensed', sans-serif", fontSize: 13,
+                  fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1,
+                  border: 'none', cursor: 'pointer',
+                }}
+              >
+                View Full Profile
               </button>
               <button style={{
                 padding: '12px 16px', background: 'none', border: '1.5px solid #0a0a0a',
