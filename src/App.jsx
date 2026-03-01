@@ -26,7 +26,71 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
 
-      // Override doLogin to use Supabase
+      // ── Rename Product pill and make it toggle with account type ──
+      const productPill = document.querySelector('.su-disc-pill[data-disc="product"]');
+      if (productPill) {
+        productPill.textContent = 'Product Manufacturer';
+        productPill.id = 'su-pill-product';
+      }
+
+      function updateProductPillVisibility() {
+        const acctType = document.getElementById('su-acct-type-val').value;
+        const pill = document.getElementById('su-pill-product');
+        if (pill) {
+          pill.style.display = acctType === 'business' ? '' : 'none';
+        }
+      }
+
+      // ── Inject client option into discipline picker ──
+      const discGrid = document.getElementById('su-discipline-grid');
+      if (discGrid && !document.getElementById('su-disc-separator')) {
+
+        const sep = document.createElement('div');
+        sep.id = 'su-disc-separator';
+        sep.style.cssText = 'width:100%;height:1px;background:#e8e8e8;margin:6px 0;';
+        discGrid.appendChild(sep);
+
+        const label = document.createElement('div');
+        label.id = 'su-client-label';
+        label.style.cssText = 'width:100%;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#aaa;margin-bottom:2px;';
+        label.textContent = 'Looking to build?';
+        discGrid.appendChild(label);
+
+        const clientContainer = document.createElement('div');
+        clientContainer.id = 'su-client-pills';
+        clientContainer.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;width:100%;';
+        discGrid.appendChild(clientContainer);
+
+        function renderClientPill() {
+          const acctType = document.getElementById('su-acct-type-val').value;
+          const container = document.getElementById('su-client-pills');
+          if (!container) return;
+          container.innerHTML = '';
+
+          const pillLabel = acctType === 'business' ? 'Business Client' : 'Individual Client';
+          const pillValue = acctType === 'business' ? 'client-business' : 'client-individual';
+
+          const pill = document.createElement('div');
+          pill.className = 'su-disc-pill';
+          pill.setAttribute('data-disc', pillValue);
+          pill.style.cssText = "padding:9px 18px;border:1.5px solid #e8e8e8;font-size:12px;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;transition:all .15s;color:#666;background:white;text-transform:uppercase;letter-spacing:.5px;";
+          pill.textContent = pillLabel;
+          pill.onclick = function () { window.setSuDisc(pill, pillValue); };
+          container.appendChild(pill);
+        }
+
+        renderClientPill();
+        updateProductPillVisibility();
+
+        const origSetSuAcctType = window.setSuAcctType;
+        window.setSuAcctType = function (type) {
+          origSetSuAcctType(type);
+          renderClientPill();
+          updateProductPillVisibility();
+        };
+      }
+
+      // ── Override doLogin to use Supabase ──
       window.doLogin = async () => {
         const email = document.getElementById('login-email').value.trim().toLowerCase();
         const pass = document.getElementById('login-password').value;
@@ -70,10 +134,10 @@ export default function App() {
         if (typeof window.closeAuth === 'function') window.closeAuth();
         if (typeof window.applySession === 'function') window.applySession(session);
         if (typeof window.saveSession === 'function') window.saveSession(session);
-        if (typeof window.showToast === 'function') window.showToast('Welcome back, ' + firstName + '!');
+        if (typeof window.showToast === 'function') window.showToast('Welcome back, ' + firstName + '! 👋');
       };
 
-      // Override doSignup to use Supabase
+      // ── Override doSignup to use Supabase ──
       window.doSignup = async () => {
         const acctType = document.getElementById('su-acct-type-val').value;
         const discipline = document.getElementById('su-discipline-val').value;
@@ -110,6 +174,7 @@ export default function App() {
         if (!terms) { errEl.textContent = 'Please agree to the Terms of Service.'; errEl.style.display = 'block'; return; }
 
         const fullName = acctType === 'business' ? bizName.trim() : fname + ' ' + lname;
+        const isClient = discipline.startsWith('client-');
 
         const { data, error } = await supabase.auth.signUp({
           email: email,
@@ -119,8 +184,9 @@ export default function App() {
               full_name: fullName,
               account_type: acctType,
               discipline: discipline,
-              role: role,
+              role: isClient ? 'client' : role,
               business_name: acctType === 'business' ? bizName.trim() : '',
+              is_client: isClient,
             },
           },
         });
@@ -131,17 +197,16 @@ export default function App() {
           return;
         }
 
-        // Also update the profiles table with extra info
         if (data.user) {
           await supabase.from('profiles').update({
             full_name: fullName,
-            role: acctType,
-            title: discipline,
+            role: isClient ? 'client' : acctType,
+            title: isClient ? (acctType === 'business' ? 'Business Client' : 'Individual Client') : discipline,
           }).eq('id', data.user.id);
         }
 
         const displayName = acctType === 'business' ? bizName.trim() : fname;
-        succEl.textContent = 'Account created! Welcome to Rufplan, ' + displayName + '.';
+        succEl.textContent = '\u2713 Account created! Welcome to Rufplan, ' + displayName + '.';
         succEl.style.display = 'block';
 
         setTimeout(() => {
@@ -151,7 +216,7 @@ export default function App() {
             email: u.email,
             firstName: acctType === 'business' ? bizName.trim() : fname,
             lastName: lname,
-            role: role,
+            role: isClient ? 'client' : role,
             accountType: acctType,
             discipline: discipline,
             businessName: acctType === 'business' ? bizName.trim() : '',
@@ -165,14 +230,14 @@ export default function App() {
         }, 1200);
       };
 
-      // Override doLogout to use Supabase
+      // ── Override doLogout to use Supabase ──
       const origLogout = window.doLogout;
       window.doLogout = async () => {
         await supabase.auth.signOut();
         if (typeof origLogout === 'function') origLogout();
       };
 
-      // Hook professionals nav
+      // ── Hook professionals nav ──
       const prosNav = document.getElementById('nav-professionals');
       if (prosNav) {
         prosNav.onclick = (e) => {
@@ -182,7 +247,7 @@ export default function App() {
         };
       }
 
-      // If Supabase user exists, apply session to Rufplan UI
+      // ── If Supabase user exists, apply session to Rufplan UI ──
       if (user) {
         const firstName = user.user_metadata?.full_name?.split(' ')[0] || user.email.split('@')[0];
         const lastName = user.user_metadata?.full_name?.split(' ').slice(1).join(' ') || '';
@@ -200,12 +265,6 @@ export default function App() {
         };
         if (typeof window.applySession === 'function') window.applySession(session);
         if (typeof window.saveSession === 'function') window.saveSession(session);
-
-        // Make clicking the user pill open profile editor
-        const navPill = document.getElementById('nav-user-pill');
-        if (navPill) {
-          navPill.style.cursor = 'pointer';
-        }
       }
     }, 600);
     return () => clearTimeout(timer);
