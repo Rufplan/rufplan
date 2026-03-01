@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import Auth from './Auth';
+import ProfileEditor from './ProfileEditor';
 import RufplanApp from './Rufplan_v260';
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [showAuth, setShowAuth] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -19,6 +21,7 @@ export default function App() {
   }, []);
 
   window._openLogin = () => setShowAuth(true);
+  window._openProfile = () => setShowProfile(true);
   window._currentUser = user;
   window._logout = async () => {
     await supabase.auth.signOut();
@@ -49,7 +52,11 @@ export default function App() {
         const userName = user.user_metadata?.full_name || user.email;
         const navPill = document.getElementById('nav-user-pill');
         const navName = document.getElementById('nav-user-name');
-        if (navPill) navPill.style.display = 'flex';
+        if (navPill) {
+          navPill.style.display = 'flex';
+          navPill.style.cursor = 'pointer';
+          navPill.onclick = () => setShowProfile(true);
+        }
         if (navName) navName.textContent = userName;
         if (loginBtn) loginBtn.style.display = 'none';
         if (signupBtn) signupBtn.style.display = 'none';
@@ -62,6 +69,7 @@ export default function App() {
     <>
       <RufplanApp />
       {showAuth && <Auth onAuth={() => setShowAuth(false)} />}
+      {showProfile && user && <ProfileEditor user={user} onClose={() => setShowProfile(false)} />}
     </>
   );
 }
