@@ -1074,17 +1074,25 @@ export default function App() {
         addTermsValidation();
         
         // Fix Terms of Service and Privacy Policy links
-        document.querySelectorAll('a').forEach(a => {
-          const text = a.textContent.trim().toLowerCase();
-          if (text === 'terms of service' && !a.href.includes('terms')) {
-            a.href = '/terms.html';
-            a.target = '_blank';
-          }
-          if (text === 'privacy policy' && !a.href.includes('privacy')) {
-            a.href = '/privacy.html';
-            a.target = '_blank';
-          }
-        });
+        const termsLabel = document.querySelector('label[for="su-terms"]');
+        if (termsLabel && !termsLabel.getAttribute('data-links-fixed')) {
+          termsLabel.setAttribute('data-links-fixed', 'true');
+          const spans = termsLabel.querySelectorAll('span');
+          spans.forEach(span => {
+            const text = span.textContent.trim();
+            if (text === 'Terms of Service' || text === 'Privacy Policy') {
+              const link = document.createElement('a');
+              link.textContent = text;
+              link.href = text === 'Terms of Service' ? '/terms.html' : '/privacy.html';
+              link.target = '_blank';
+              link.style.cssText = 'color:var(--cyan);text-decoration:underline;cursor:pointer;';
+              link.addEventListener('click', (e) => {
+                e.stopPropagation(); // prevent checkbox toggle
+              });
+              span.replaceWith(link);
+            }
+          });
+        }
       }, 1000);
 
       // Clean up after 30 seconds
