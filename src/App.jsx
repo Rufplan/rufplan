@@ -552,20 +552,13 @@ export default function App() {
       initialized.current = true;
 
       // ── Auth button overrides ──
+      // Let Rufplan's native login/signup screens handle auth
+      // Only override _openLogin as a console fallback
       const loginBtn = document.getElementById('nav-login-btn');
       const signupBtn = document.getElementById('nav-signup-btn');
 
-      if (loginBtn) {
-        loginBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); setShowAuth(true); };
-      }
-      if (signupBtn) {
-        signupBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); setShowAuth(true); };
-      }
-
-      // ── Override openAuth to use Supabase ──
-      if (typeof window.openAuth === 'function') {
-        window.openAuth = () => setShowAuth(true);
-      }
+      // ── Override openAuth to keep Rufplan's native UI ──
+      // Don't override - let Rufplan show its own auth modal
 
       // ── Override doLogin to use Supabase ──
       const origDoLogin = window.doLogin;
@@ -1007,10 +1000,183 @@ export default function App() {
         if (discGrid && !discGrid.querySelector('[data-client-pill]')) {
           injectClientPills();
         }
+        
+        // Inject Google sign-in buttons
+        injectGoogleLoginButton();
+        injectGoogleSignupButton();
       }, 1000);
 
       // Clean up after 30 seconds
       setTimeout(() => clearInterval(pillInterval), 30000);
+      
+      // Google SVG icon reusable
+      const googleSvg = `<svg width="18" height="18" viewBox="0 0 48 48">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+      </svg>`;
+      
+      const googleBtnStyle = `
+        width:100%;padding:12px;background:#fff;color:#333;
+        font-family:'Barlow',sans-serif;font-size:14px;font-weight:600;
+        border:1.5px solid #ddd;cursor:pointer;
+        display:flex;align-items:center;justify-content:center;gap:10px;
+        border-radius:2px;transition:all .2s;
+      `;
+      
+      const orDividerStyle = (dark) => `
+        <div style="display:flex;align-items:center;gap:12px;margin:14px 0;">
+          <div style="flex:1;height:1px;background:${dark ? 'rgba(0,0,0,.1)' : 'rgba(255,255,255,.15)'}"></div>
+          <span style="font-size:10px;color:${dark ? 'rgba(0,0,0,.3)' : 'rgba(255,255,255,.35)'};font-weight:700;text-transform:uppercase;letter-spacing:2px">or</span>
+          <div style="flex:1;height:1px;background:${dark ? 'rgba(0,0,0,.1)' : 'rgba(255,255,255,.15)'}"></div>
+        </div>
+      `;
+      
+      function addGoogleClickHandler(btnId) {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.origin },
+          });
+          if (error) showToast(error.message, '#e74c3c');
+        });
+        btn.addEventListener('mouseover', () => { btn.style.background = '#f8f8f8'; });
+        btn.addEventListener('mouseout', () => { btn.style.background = '#fff'; });
+      }
+
+      // ── Inject Google button into LOGIN form ──
+      function injectGoogleLoginButton() {
+        const loginEmail = document.getElementById('login-email');
+        if (!loginEmail) return;
+        const container = loginEmail.parentElement;
+        if (!container || container.querySelector('[data-google-login]')) return;
+        
+        const wrapper = document.createElement('div');
+        wrapper.setAttribute('data-google-login', 'true');
+        wrapper.innerHTML = `
+          <button id="_google-login-btn" style="${googleBtnStyle}">
+            ${googleSvg} Continue with Google
+          </button>
+          ${orDividerStyle(true)}
+        `;
+        container.insertBefore(wrapper, loginEmail);
+        addGoogleClickHandler('_google-login-btn');
+      }
+
+      // ── Inject Google button into SIGNUP form and rearrange layout ──
+      function injectGoogleSignupButton() {
+        const suEmail = document.getElementById('su-email');
+        if (!suEmail) return;
+        if (document.querySelector('[data-google-signup]')) return;
+        
+        const formContainer = suEmail.parentElement.parentElement;
+        if (!formContainer) return;
+        const children = Array.from(formContainer.children);
+        
+        // Find the key sections by index/content
+        let disciplineSection = null;
+        let emailSection = null;
+        let bizIndivSection = null;
+        let nameWrapBiz = document.getElementById('su-biz-name-wrap');
+        let nameWrapIndiv = document.getElementById('su-individual-name-wrap');
+        
+        children.forEach((child, i) => {
+          const text = child.textContent.trim().substring(0, 20);
+          if (text.startsWith('Discipline') || text.startsWith('DISCIPLINE')) disciplineSection = child;
+          if (text.startsWith('Email') || text.startsWith('EMAIL')) emailSection = child;
+          if (text.includes('Business or Individual') || text.includes('BUSINESS OR INDIVIDUAL')) bizIndivSection = child;
+        });
+        
+        if (!disciplineSection || !emailSection) return;
+        
+        // Move discipline to right after the name wraps (which are after biz/individual)
+        const insertAfter = nameWrapIndiv || nameWrapBiz || bizIndivSection;
+        if (insertAfter && insertAfter.nextSibling) {
+          formContainer.insertBefore(disciplineSection, insertAfter.nextSibling);
+        }
+        
+        // Create divider + Google button + or + (email section stays where it is)
+        const wrapper = document.createElement('div');
+        wrapper.setAttribute('data-google-signup', 'true');
+        wrapper.style.cssText = 'margin:20px 0 0;';
+        wrapper.innerHTML = `
+          <div style="display:flex;align-items:center;gap:12px;margin:20px 0 16px;">
+            <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
+            <span style="font-size:9px;color:rgba(0,0,0,.25);font-weight:700;text-transform:uppercase;letter-spacing:2px">Create your account</span>
+            <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
+          </div>
+          <button id="_google-signup-btn" style="${googleBtnStyle}" type="button">
+            ${googleSvg} Sign up with Google
+          </button>
+          ${orDividerStyle(true)}
+        `;
+        
+        // Insert the Google wrapper right before the email section
+        formContainer.insertBefore(wrapper, emailSection);
+        
+        // Add click handler with validation
+        const gBtn = document.getElementById('_google-signup-btn');
+        if (gBtn) {
+          gBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Check if Business or Individual is selected
+            const bizCard = formContainer.querySelector('.su-type-card.active, .su-type-card.selected, [data-acct-type].active');
+            if (!bizCard) {
+              showToast('Please select Business or Individual first', '#e74c3c');
+              return;
+            }
+            
+            // Check if a discipline is selected
+            const activePill = formContainer.querySelector('.su-disc-pill.active, .disc-pill.active');
+            if (!activePill) {
+              showToast('Please select a discipline first', '#e74c3c');
+              return;
+            }
+            
+            const { error } = await supabase.auth.signInWithOAuth({
+              provider: 'google',
+              options: { redirectTo: window.location.origin },
+            });
+            if (error) showToast(error.message, '#e74c3c');
+          });
+          gBtn.addEventListener('mouseover', () => { gBtn.style.background = '#f8f8f8'; });
+          gBtn.addEventListener('mouseout', () => { gBtn.style.background = '#fff'; });
+        }
+        
+        // Also add validation to the CREATE MY ACCOUNT button
+        const createBtn = formContainer.querySelector('button');
+        if (createBtn && createBtn.textContent.includes('CREATE')) {
+          const origOnclick = createBtn.onclick;
+          createBtn.onclick = (e) => {
+            // Check if Business or Individual is selected
+            const bizCard = formContainer.querySelector('.su-type-card.active, .su-type-card.selected, [data-acct-type].active');
+            if (!bizCard) {
+              e.preventDefault();
+              e.stopPropagation();
+              showToast('Please select Business or Individual first', '#e74c3c');
+              return;
+            }
+            
+            // Check if a discipline is selected
+            const activePill = formContainer.querySelector('.su-disc-pill.active, .disc-pill.active');
+            if (!activePill) {
+              e.preventDefault();
+              e.stopPropagation();
+              showToast('Please select a discipline first', '#e74c3c');
+              return;
+            }
+            
+            if (origOnclick) origOnclick.call(createBtn, e);
+          };
+        }
+      }
 
     }, 800);
 
