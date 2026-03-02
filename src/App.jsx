@@ -611,18 +611,17 @@ export default function App() {
 
         // Detect selected discipline
         let discipline = '';
-        const activePill = document.querySelector('.disc-pill.active, .discipline-pill.active, [data-discipline].active');
+        const activePill = document.querySelector('.su-disc-pill.active, .disc-pill.active, .discipline-pill.active, [data-discipline].active');
         if (activePill) discipline = activePill.textContent.trim();
 
         // Detect account type
         let accountType = 'individual';
-        const bizTab = document.querySelector('.acct-tab.active, [data-acct-type].active');
+        const bizTab = document.querySelector('.su-type-card.active, .su-type-card.selected, .acct-tab.active, [data-acct-type].active');
         if (bizTab && bizTab.textContent.toLowerCase().includes('business')) accountType = 'business';
 
         // Detect if client
         let role = 'professional';
-        if (discipline.toLowerCase().includes('client') || discipline.toLowerCase().includes('developer') ||
-            discipline.toLowerCase().includes('homeowner') || discipline.toLowerCase().includes('owner rep')) {
+        if (discipline.toLowerCase() === 'client') {
           role = 'client';
         }
 
@@ -917,93 +916,175 @@ export default function App() {
 
       // ── Inject client discipline pills into signup ──
       const injectClientPills = () => {
-        const discGrid = document.querySelector('.disc-grid, .discipline-grid, #discipline-pills');
+        // Find the discipline grid by looking for the parent of the first pill
+        const firstPill = document.querySelector('.su-disc-pill');
+        if (!firstPill) return;
+        const discGrid = firstPill.parentElement;
         if (!discGrid) return;
 
         // Check if already injected
         if (discGrid.querySelector('[data-client-pill]')) return;
 
-        const separator = document.createElement('div');
-        separator.setAttribute('data-client-pill', 'true');
-        Object.assign(separator.style, {
-          width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
-          margin: '12px 0 8px',
-        });
-        separator.innerHTML = `
-          <div style="flex:1;height:1px;background:rgba(255,255,255,.1)"></div>
-          <span style="font-size:9px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.35);
-            text-transform:uppercase;white-space:nowrap">Looking to build?</span>
-          <div style="flex:1;height:1px;background:rgba(255,255,255,.1)"></div>
-        `;
-        discGrid.appendChild(separator);
+        // Change "DISCIPLINE" label to "WHAT DESCRIBES YOU BEST"
+        const discLabel = discGrid.parentElement?.querySelector('label, span, div');
+        if (discLabel && discLabel.textContent.trim().toUpperCase() === 'DISCIPLINE') {
+          discLabel.textContent = 'What Describes You Best';
+        }
+        // Also check previous sibling of the disc grid parent
+        const discParent = discGrid.parentElement;
+        if (discParent) {
+          Array.from(discParent.children).forEach(child => {
+            if (child !== discGrid && child.textContent.trim().toUpperCase() === 'DISCIPLINE') {
+              child.textContent = 'What Describes You Best';
+            }
+          });
+          // Check the parent itself if it has a label-like text node
+          const prevSib = discParent.previousElementSibling;
+          if (prevSib && prevSib.textContent.trim().toUpperCase() === 'DISCIPLINE') {
+            prevSib.textContent = 'What Describes You Best';
+          }
+        }
 
-        // Detect if business or individual tab is active
+        // Detect if business or individual is selected
+        // Use the business name wrap visibility as the reliable indicator
         const isBusiness = () => {
-          const activeTab = document.querySelector('.acct-tab.active, [data-acct-type].active');
-          return activeTab && activeTab.textContent.toLowerCase().includes('business');
+          const bizWrap = document.getElementById('su-biz-name-wrap');
+          if (bizWrap) {
+            // If business name field is visible, Business is selected
+            return bizWrap.style.display !== 'none' && bizWrap.offsetParent !== null;
+          }
+          return false;
         };
 
+        // Create Client pill — styled to match existing pills
         const clientPill = document.createElement('div');
         clientPill.setAttribute('data-client-pill', 'true');
-        clientPill.className = 'disc-pill';
-        clientPill.textContent = isBusiness() ? 'Business Client' : 'Individual Client';
-        Object.assign(clientPill.style, {
-          padding: '8px 16px', cursor: 'pointer', fontSize: '12px',
-          fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase',
-          border: '1px solid rgba(62,207,247,.3)', color: '#3ECFF7',
-          textAlign: 'center', transition: 'all .2s',
-        });
-        clientPill.onclick = () => {
-          discGrid.querySelectorAll('.disc-pill').forEach(p => {
-            p.style.background = 'transparent';
-            p.style.color = p.getAttribute('data-client-pill') ? '#3ECFF7' : '';
-            if (p.classList) p.classList.remove('active');
+        clientPill.className = 'su-disc-pill';
+        clientPill.textContent = 'Client';
+        // Match the existing pill styling
+        const existingPill = discGrid.querySelector('.su-disc-pill');
+        if (existingPill) {
+          const cs = window.getComputedStyle(existingPill);
+          Object.assign(clientPill.style, {
+            padding: cs.padding || '8px 16px',
+            cursor: 'pointer',
+            fontSize: cs.fontSize || '12px',
+            fontWeight: cs.fontWeight || '600',
+            letterSpacing: cs.letterSpacing || '1px',
+            textTransform: cs.textTransform || 'uppercase',
+            border: cs.border || '1px solid #ddd',
+            textAlign: 'center',
+            transition: 'all .2s',
+            display: 'inline-block',
+            marginRight: cs.marginRight || '8px',
+            marginBottom: cs.marginBottom || '8px',
           });
+        } else {
+          Object.assign(clientPill.style, {
+            padding: '8px 16px', cursor: 'pointer', fontSize: '12px',
+            fontWeight: '600', letterSpacing: '1px', textTransform: 'uppercase',
+            border: '1px solid #ddd', textAlign: 'center', transition: 'all .2s',
+          });
+        }
+        
+        // Add click behavior matching existing pills
+        clientPill.onclick = () => {
+          // Deselect all pills
+          discGrid.querySelectorAll('.su-disc-pill, .disc-pill').forEach(p => {
+            p.classList.remove('active');
+            p.style.background = '';
+            p.style.color = '';
+            p.style.borderColor = '';
+          });
+          // Select this one
+          clientPill.classList.add('active');
           clientPill.style.background = '#3ECFF7';
           clientPill.style.color = '#0a0a0a';
-          clientPill.classList.add('active');
+          clientPill.style.borderColor = '#3ECFF7';
         };
+        
         discGrid.appendChild(clientPill);
 
-        // Update Product pill to say Product Manufacturer for business
-        const updateProductPill = () => {
-          const pills = discGrid.querySelectorAll('.disc-pill:not([data-client-pill])');
+        // Update pills based on Business/Individual selection
+        const updatePills = () => {
+          const pills = discGrid.querySelectorAll('.su-disc-pill:not([data-client-pill])');
           pills.forEach(p => {
-            if (p.textContent.includes('Product')) {
+            const text = p.textContent.trim().toLowerCase();
+            if (text.includes('product')) {
               if (isBusiness()) {
                 p.textContent = 'Product Manufacturer';
                 p.style.display = '';
               } else {
+                // Hide Product for Individual
                 p.style.display = 'none';
+                // If it was selected, deselect it
+                if (p.classList.contains('active')) {
+                  p.classList.remove('active');
+                  p.style.background = '';
+                  p.style.color = '';
+                  p.style.borderColor = '';
+                }
               }
             }
           });
-          clientPill.textContent = isBusiness() ? 'Business Client' : 'Individual Client';
         };
 
-        // Watch for tab changes
-        const tabs = document.querySelectorAll('.acct-tab, [data-acct-type]');
-        tabs.forEach(tab => {
-          const origClick = tab.onclick;
-          tab.onclick = (e) => {
-            if (origClick) origClick.call(tab, e);
-            setTimeout(updateProductPill, 50);
+        // Watch for Business/Individual card clicks
+        // Find the cards by looking for elements containing BUSINESS and INDIVIDUAL text
+        const bizIndivContainer = document.getElementById('su-biz-name-wrap')?.parentElement;
+        if (bizIndivContainer) {
+          // Watch for any clicks in the form that might toggle business/individual
+          bizIndivContainer.addEventListener('click', () => {
+            setTimeout(updatePills, 100);
+          });
+        }
+        
+        // Also watch with a MutationObserver on su-biz-name-wrap display changes
+        const bizWrap = document.getElementById('su-biz-name-wrap');
+        if (bizWrap) {
+          const observer = new MutationObserver(() => {
+            setTimeout(updatePills, 50);
+          });
+          observer.observe(bizWrap, { attributes: true, attributeFilter: ['style'] });
+        }
+
+        // Also try finding cards by their selectors
+        const typeCards = document.querySelectorAll('.su-type-card, .acct-tab, [data-acct-type]');
+        typeCards.forEach(card => {
+          const origClick = card.onclick;
+          card.onclick = (e) => {
+            if (origClick) origClick.call(card, e);
+            setTimeout(updatePills, 50);
           };
         });
 
-        updateProductPill();
+        updatePills();
       };
 
       // Try injecting pills periodically (signup form may not exist yet)
       const pillInterval = setInterval(() => {
-        const discGrid = document.querySelector('.disc-grid, .discipline-grid, #discipline-pills');
-        if (discGrid && !discGrid.querySelector('[data-client-pill]')) {
+        const firstPill = document.querySelector('.su-disc-pill');
+        if (firstPill && firstPill.parentElement && !firstPill.parentElement.querySelector('[data-client-pill]')) {
           injectClientPills();
         }
         
         // Inject Google sign-in buttons
         injectGoogleLoginButton();
         injectGoogleSignupButton();
+        addTermsValidation();
+        
+        // Fix Terms of Service and Privacy Policy links
+        document.querySelectorAll('a').forEach(a => {
+          const text = a.textContent.trim().toLowerCase();
+          if (text === 'terms of service' && !a.href.includes('terms')) {
+            a.href = '/terms.html';
+            a.target = '_blank';
+          }
+          if (text === 'privacy policy' && !a.href.includes('privacy')) {
+            a.href = '/privacy.html';
+            a.target = '_blank';
+          }
+        });
       }, 1000);
 
       // Clean up after 30 seconds
@@ -1066,6 +1147,43 @@ export default function App() {
         `;
         container.insertBefore(wrapper, loginEmail);
         addGoogleClickHandler('_google-login-btn');
+        
+        // Remove demo accounts section from login form
+        const loginContainer = loginEmail.closest('form') || container.parentElement;
+        if (loginContainer) {
+          Array.from(loginContainer.querySelectorAll('*')).forEach(el => {
+            const text = el.textContent.toLowerCase();
+            if ((text.includes('demo') && text.includes('account')) || 
+                (text.includes('demo') && (text.includes('user') || text.includes('login')))) {
+              // Check it's a container, not nested deep
+              if (el.children.length <= 5 && el.parentElement === loginContainer) {
+                el.style.display = 'none';
+              }
+            }
+          });
+          // Also search for specific demo elements
+          loginContainer.querySelectorAll('[class*="demo"], [id*="demo"]').forEach(el => {
+            el.style.display = 'none';
+          });
+        }
+      }
+
+      // ── Add terms checkbox validation to signup ──
+      function addTermsValidation() {
+        const termsCheckbox = document.getElementById('su-terms');
+        if (!termsCheckbox) return;
+        if (termsCheckbox.getAttribute('data-validated')) return;
+        termsCheckbox.setAttribute('data-validated', 'true');
+        
+        // Override the doSignup to check terms first
+        const currentDoSignup = window.doSignup;
+        window.doSignup = async (...args) => {
+          if (!termsCheckbox.checked) {
+            showToast('Please agree to Rufplan\'s Terms of Service', '#e74c3c');
+            return;
+          }
+          if (currentDoSignup) return currentDoSignup.apply(window, args);
+        };
       }
 
       // ── Inject Google button into SIGNUP form and rearrange layout ──
@@ -1081,29 +1199,45 @@ export default function App() {
         // Find the key sections by index/content
         let disciplineSection = null;
         let emailSection = null;
-        let bizIndivSection = null;
-        let nameWrapBiz = document.getElementById('su-biz-name-wrap');
-        let nameWrapIndiv = document.getElementById('su-individual-name-wrap');
         
         children.forEach((child, i) => {
-          const text = child.textContent.trim().substring(0, 20);
-          if (text.startsWith('Discipline') || text.startsWith('DISCIPLINE')) disciplineSection = child;
-          if (text.startsWith('Email') || text.startsWith('EMAIL')) emailSection = child;
-          if (text.includes('Business or Individual') || text.includes('BUSINESS OR INDIVIDUAL')) bizIndivSection = child;
+          const text = child.textContent.trim().substring(0, 30).toUpperCase();
+          // Match both old and new label
+          if (text.startsWith('DISCIPLINE') || text.startsWith('WHAT DESCRIBES')) disciplineSection = child;
+          if (text.startsWith('EMAIL')) emailSection = child;
         });
         
-        if (!disciplineSection || !emailSection) return;
+        if (!emailSection) return;
         
-        // Move discipline to right after the name wraps (which are after biz/individual)
-        const insertAfter = nameWrapIndiv || nameWrapBiz || bizIndivSection;
-        if (insertAfter && insertAfter.nextSibling) {
+        // Sort pills: Client first, then alphabetical, Product Manufacturer last (or hidden)
+        const discGrid = document.querySelector('.su-disc-pill')?.parentElement;
+        if (discGrid) {
+          const allPills = Array.from(discGrid.querySelectorAll('.su-disc-pill'));
+          const clientPill = allPills.find(p => p.getAttribute('data-client-pill'));
+          const otherPills = allPills.filter(p => !p.getAttribute('data-client-pill'));
+          
+          // Sort others alphabetically
+          otherPills.sort((a, b) => a.textContent.trim().localeCompare(b.textContent.trim()));
+          
+          // Rebuild: Client first, then sorted others
+          if (clientPill) {
+            discGrid.insertBefore(clientPill, discGrid.firstChild);
+          }
+          otherPills.forEach(pill => discGrid.appendChild(pill));
+        }
+        
+        // Move discipline section right after name wraps if needed
+        const nameWrapIndiv = document.getElementById('su-individual-name-wrap');
+        const nameWrapBiz = document.getElementById('su-biz-name-wrap');
+        const insertAfter = nameWrapIndiv || nameWrapBiz;
+        if (disciplineSection && insertAfter && insertAfter.nextSibling !== disciplineSection) {
           formContainer.insertBefore(disciplineSection, insertAfter.nextSibling);
         }
         
-        // Create divider + Google button + or + (email section stays where it is)
+        // Create divider + Google button + or
         const wrapper = document.createElement('div');
         wrapper.setAttribute('data-google-signup', 'true');
-        wrapper.style.cssText = 'margin:20px 0 0;';
+        wrapper.style.cssText = 'margin:8px 0 0;';
         wrapper.innerHTML = `
           <div style="display:flex;align-items:center;gap:12px;margin:20px 0 16px;">
             <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
@@ -1126,17 +1260,27 @@ export default function App() {
             e.preventDefault();
             e.stopPropagation();
             
-            // Check if Business or Individual is selected
-            const bizCard = formContainer.querySelector('.su-type-card.active, .su-type-card.selected, [data-acct-type].active');
-            if (!bizCard) {
+            // Validate: check if business name wrap is visible (business) or individual name is visible
+            const bizWrap = document.getElementById('su-biz-name-wrap');
+            const indivWrap = document.getElementById('su-individual-name-wrap');
+            const bizVisible = bizWrap && bizWrap.style.display !== 'none' && bizWrap.offsetParent !== null;
+            const indivVisible = indivWrap && indivWrap.style.display !== 'none' && indivWrap.offsetParent !== null;
+            if (!bizVisible && !indivVisible) {
               showToast('Please select Business or Individual first', '#e74c3c');
               return;
             }
             
             // Check if a discipline is selected
-            const activePill = formContainer.querySelector('.su-disc-pill.active, .disc-pill.active');
+            const activePill = document.querySelector('.su-disc-pill.active');
             if (!activePill) {
-              showToast('Please select a discipline first', '#e74c3c');
+              showToast('Please select what describes you best', '#e74c3c');
+              return;
+            }
+            
+            // Check terms checkbox
+            const termsBox = document.getElementById('su-terms');
+            if (termsBox && !termsBox.checked) {
+              showToast("Please agree to Rufplan's Terms of Service", '#e74c3c');
               return;
             }
             
@@ -1151,31 +1295,34 @@ export default function App() {
         }
         
         // Also add validation to the CREATE MY ACCOUNT button
-        const createBtn = formContainer.querySelector('button');
-        if (createBtn && createBtn.textContent.includes('CREATE')) {
-          const origOnclick = createBtn.onclick;
-          createBtn.onclick = (e) => {
-            // Check if Business or Individual is selected
-            const bizCard = formContainer.querySelector('.su-type-card.active, .su-type-card.selected, [data-acct-type].active');
-            if (!bizCard) {
-              e.preventDefault();
-              e.stopPropagation();
-              showToast('Please select Business or Individual first', '#e74c3c');
-              return;
-            }
-            
-            // Check if a discipline is selected
-            const activePill = formContainer.querySelector('.su-disc-pill.active, .disc-pill.active');
-            if (!activePill) {
-              e.preventDefault();
-              e.stopPropagation();
-              showToast('Please select a discipline first', '#e74c3c');
-              return;
-            }
-            
-            if (origOnclick) origOnclick.call(createBtn, e);
-          };
-        }
+        const allBtns = formContainer.querySelectorAll('button');
+        allBtns.forEach(btn => {
+          if (btn.textContent.includes('CREATE') || btn.textContent.includes('Create')) {
+            const origOnclick = btn.onclick;
+            btn.onclick = (e) => {
+              const bizWrap = document.getElementById('su-biz-name-wrap');
+              const indivWrap = document.getElementById('su-individual-name-wrap');
+              const bizVisible = bizWrap && bizWrap.style.display !== 'none' && bizWrap.offsetParent !== null;
+              const indivVisible = indivWrap && indivWrap.style.display !== 'none' && indivWrap.offsetParent !== null;
+              if (!bizVisible && !indivVisible) {
+                e.preventDefault();
+                e.stopPropagation();
+                showToast('Please select Business or Individual first', '#e74c3c');
+                return;
+              }
+              
+              const activePill = document.querySelector('.su-disc-pill.active');
+              if (!activePill) {
+                e.preventDefault();
+                e.stopPropagation();
+                showToast('Please select what describes you best', '#e74c3c');
+                return;
+              }
+              
+              if (origOnclick) origOnclick.call(btn, e);
+            };
+          }
+        });
       }
 
     }, 800);
