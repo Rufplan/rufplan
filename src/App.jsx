@@ -139,6 +139,48 @@ export default function App() {
     return { profile, professional: ownProfessionalData.current, business: ownBizData.current };
   }
 
+  // ── Update avatar image everywhere on the page ──
+  function updateAvatarEverywhere(url) {
+    if (!url) return;
+
+    // Settings page avatar
+    const settingsSection = document.getElementById('db-section-settings');
+    if (settingsSection) {
+      const img = settingsSection.querySelector('img');
+      if (img) img.src = url;
+    }
+
+    // Profile page avatar — .profile-pic contains the avatar img
+    const profilePic = document.querySelector('.profile-pic');
+    if (profilePic) {
+      const img = profilePic.querySelector('img');
+      if (img) img.src = url;
+      // Also set as background-image if used
+      if (profilePic.style.backgroundImage) {
+        profilePic.style.backgroundImage = `url(${url})`;
+      }
+    }
+
+    // Also check for any img with base64 src that's avatar-sized
+    document.querySelectorAll('img').forEach(img => {
+      const src = img.src || '';
+      const r = img.getBoundingClientRect();
+      // Avatar: base64 or unsplash, sized 60-250px, in the profile header area (not nav bar)
+      // Skip images in the top 80px (nav bar contains the logo)
+      if ((src.startsWith('data:image') || src.includes('unsplash.com/photo-1507003211169') || src.includes('supabase.co/storage')) &&
+          r.width >= 50 && r.width <= 250 && r.top > 80 && r.top < 400) {
+        img.src = url;
+      }
+    });
+
+    // Nav pill avatar (if it has an image)
+    const navPill = document.getElementById('nav-user-pill');
+    if (navPill) {
+      const navImg = navPill.querySelector('img');
+      if (navImg) navImg.src = url;
+    }
+  }
+
   // ── Update profile page DOM with data from Supabase ──
   function updateProfilePageFromSupabase() {
     const profile = ownProfileData.current;
@@ -177,6 +219,11 @@ export default function App() {
     });
 
     console.log('Profile page updated from Supabase:', location);
+
+    // Update avatar on profile page
+    if (profile?.avatar_url) {
+      updateAvatarEverywhere(profile.avatar_url);
+    }
   }
 
   // Watch for profile page to appear and update it
@@ -1514,8 +1561,117 @@ export default function App() {
 
         // Load data into settings
         loadSettingsFromSupabase();
+
+        // ── Override Upload Photo button ──
+        const allBtns = settingsSection.querySelectorAll('button');
+        let uploadBtn = null;
+        allBtns.forEach(btn => {
+          if (btn.textContent.trim().toLowerCase().includes('upload photo')) {
+            uploadBtn = btn;
+          }
+        });
+
+        if (uploadBtn && !uploadBtn.getAttribute('data-avatar-wired')) {
+          uploadBtn.setAttribute('data-avatar-wired', 'true');
+
+          // Create hidden file input
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.accept = 'image/jpeg, image/png, image/webp';
+          fileInput.style.display = 'none';
+          settingsSection.appendChild(fileInput);
+
+          uploadBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            fileInput.click();
+          }, true);
+
+          fileInput.addEventListener('change', async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            // Validate
+            if (file.size > 5 * 1024 * 1024) {
+              showToast('Image must be under 5MB', '#e74c3c');
+              return;
+            }
+            if (!file.type.startsWith('image/')) {
+              showToast('Please select an image file', '#e74c3c');
+              return;
+            }
+
+            showToast('Uploading photo...', '#333');
+
+            try {
+              // Upload to Supabase Storage: avatars/{userId}/avatar.ext
+              const ext = file.name.split('.').pop().toLowerCase();
+              const filePath = `${user.id}/avatar.${ext}`;
+
+              const { error: uploadError } = await supabase.storage
+                .from('avatars')
+                .upload(filePath, file, { 
+                  upsert: true,
+                  contentType: file.type 
+                });
+
+              if (uploadError) {
+                console.error('Upload error:', uploadError);
+                showToast('Upload failed: ' + uploadError.message, '#e74c3c');
+                return;
+              }
+
+              // Get public URL
+              const { data: urlData } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(filePath);
+
+              const avatarUrl = urlData.publicUrl + '?t=' + Date.now(); // cache bust
+
+              // Save URL to profiles table
+              const { error: dbError } = await supabase
+                .from('profiles')
+                .update({ avatar_url: avatarUrl })
+                .eq('id', user.id);
+
+              if (dbError) {
+                console.error('DB save error:', dbError);
+                showToast('Failed to save photo URL', '#e74c3c');
+                return;
+              }
+
+              // Update the local ref
+              if (ownProfileData.current) {
+                ownProfileData.current.avatar_url = avatarUrl;
+              }
+
+              // Update the Settings page avatar image
+              const settingsImg = settingsSection.querySelector('img');
+              if (settingsImg) settingsImg.src = avatarUrl;
+
+              // Update avatar everywhere on the page
+              updateAvatarEverywhere(avatarUrl);
+
+              showToast('Photo updated ✓');
+              console.log('Avatar uploaded:', avatarUrl);
+            } catch (err) {
+              console.error('Avatar upload error:', err);
+              showToast('Upload failed', '#e74c3c');
+            }
+
+            // Reset file input
+            fileInput.value = '';
+          });
+        }
+
+        // Load avatar from Supabase into Settings image
+        if (ownProfileData.current?.avatar_url) {
+          const settingsImg = settingsSection.querySelector('img');
+          if (settingsImg) settingsImg.src = ownProfileData.current.avatar_url;
+        }
       }
 
+      // ── Update avatar image everywhere on the page ──
       // Watch for Settings page being shown
       const settingsObserver = setInterval(() => {
         const settingsSection = document.getElementById('db-section-settings');
