@@ -139,6 +139,60 @@ export default function App() {
     return { profile, professional: ownProfessionalData.current, business: ownBizData.current };
   }
 
+  // ── Update profile page DOM with data from Supabase ──
+  function updateProfilePageFromSupabase() {
+    const profile = ownProfileData.current;
+    const pro = ownProfessionalData.current;
+    if (!profile && !pro) return;
+
+    const fields = document.querySelectorAll('.editable-field');
+    if (fields.length < 2) return; // profile page not loaded yet
+
+    const location = profile?.location || pro?.location || '';
+    if (!location) return;
+
+    // Build display formats
+    // "City, State" for header subtitle
+    const locParts = location.split(',').map(s => s.trim());
+    const shortLoc = locParts.slice(0, 2).join(', '); // "San Francisco, CA"
+
+    // Index 0: "Architectural Designer · New York, NY" → update location part
+    if (fields[0]) {
+      const text = fields[0].textContent.trim();
+      if (text.includes('·')) {
+        const titlePart = text.split('·')[0].trim();
+        fields[0].textContent = titlePart + ' · ' + shortLoc;
+      }
+    }
+
+    // Find the location detail field — it contains "New York, NY, USA" or similar
+    // It's typically around index 41 but let's search by content pattern
+    fields.forEach((field, i) => {
+      const text = field.textContent.trim();
+      // Match location patterns like "City, State, Country" or "City, State"
+      if (i > 5 && text.match(/^[A-Z][a-z]+.*,\s*[A-Z]{2}.*/) && 
+          (text.includes('USA') || text.includes('United States') || text.match(/,\s*[A-Z]{2}$/))) {
+        field.textContent = location;
+      }
+    });
+
+    console.log('Profile page updated from Supabase:', location);
+  }
+
+  // Watch for profile page to appear and update it
+  useEffect(() => {
+    if (!user) return;
+    const profilePageObserver = setInterval(() => {
+      const fields = document.querySelectorAll('.editable-field');
+      // Profile page has many editable-field elements
+      if (fields.length > 10 && ownProfileData.current) {
+        updateProfilePageFromSupabase();
+      }
+    }, 2000);
+
+    return () => clearInterval(profilePageObserver);
+  }, [user]);
+
   // ─── Save individual profile from captured values (captured BEFORE toggle) ───
   async function saveIndividualFromCaptured(captured) {
     if (!user) return;
@@ -1332,6 +1386,144 @@ export default function App() {
           }
         });
       }
+
+      // ── Settings page: Override save buttons to persist to Supabase ──
+      function overrideSettingsSave() {
+        const settingsSection = document.getElementById('db-section-settings');
+        if (!settingsSection) return;
+        if (settingsSection.getAttribute('data-supabase-wired')) return;
+        settingsSection.setAttribute('data-supabase-wired', 'true');
+
+        // Load Supabase data into Settings fields
+        async function loadSettingsFromSupabase() {
+          if (!user) return;
+          const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+          const { data: pro } = await supabase.from('professionals').select('*').eq('profile_id', user.id).single();
+
+          if (profile) {
+            const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+            const cleanFullName = (profile.full_name || '').replace(/\s*(Verified|✓|✔|Badge|PRO)\s*/gi, '').trim();
+            setVal('db-settings-name', cleanFullName.split(' ')[0] || '');
+            setVal('db-settings-lastname', cleanFullName.split(' ').slice(1).join(' ') || '');
+            setVal('db-settings-email', user.email || '');
+            if (profile.location) {
+              // Parse location like "New York, NY, USA" or "New York, NY"
+              const parts = profile.location.split(',').map(s => s.trim());
+              setVal('prof-city', parts[0] || '');
+              setVal('prof-state', parts[1] || '');
+              setVal('prof-country', parts[2] || '');
+            }
+            if (profile.phone) {
+              // Phone input has no ID, find it by value pattern or position
+              const inputs = settingsSection.querySelectorAll('input[type="text"]');
+              inputs.forEach(inp => {
+                if (inp.value.includes('555') || inp.placeholder?.toLowerCase().includes('phone')) {
+                  inp.value = profile.phone;
+                }
+              });
+            }
+          }
+
+          if (pro) {
+            const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+            setVal('prof-street', pro.street || '');
+            setVal('prof-zip', pro.zip || '');
+          }
+
+          console.log('Settings loaded from Supabase');
+        }
+
+        // Save Settings to Supabase
+        async function saveSettingsToSupabase() {
+          if (!user) return;
+
+          const getVal = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+
+          const firstName = getVal('db-settings-name');
+          const lastName = getVal('db-settings-lastname');
+          // Clean up any badge text that might be in the name fields
+          const cleanName = (n) => n.replace(/\s*(Verified|✓|✔|Badge|PRO)\s*/gi, '').trim();
+          const fullName = [cleanName(firstName), cleanName(lastName)].filter(Boolean).join(' ');
+          const city = getVal('prof-city');
+          const state = getVal('prof-state');
+          const country = getVal('prof-country');
+          const street = getVal('prof-street');
+          const zip = getVal('prof-zip');
+
+          // Build location string
+          const locationParts = [city, state, country].filter(Boolean);
+          const location = locationParts.join(', ');
+
+          // Display location (what shows on profile) — City, State format
+          const displayLocation = [city, state].filter(Boolean).join(', ');
+
+          // Update profiles table
+          const profileUpdates = {};
+          if (fullName) profileUpdates.full_name = fullName;
+          if (location) profileUpdates.location = location;
+
+          if (Object.keys(profileUpdates).length > 0) {
+            const { error: profError } = await supabase
+              .from('profiles')
+              .update(profileUpdates)
+              .eq('id', user.id);
+
+            if (profError) {
+              console.error('Settings profile save error:', profError);
+              showToast('Error saving profile: ' + profError.message, '#e74c3c');
+              return;
+            }
+            ownProfileData.current = { ...ownProfileData.current, ...profileUpdates };
+          }
+
+          // Update professionals table
+          if (ownProfessionalData.current) {
+            const proUpdates = {};
+            if (fullName) proUpdates.name = fullName;
+            if (location) proUpdates.location = displayLocation;
+            if (street) proUpdates.street = street;
+            if (zip) proUpdates.zip = zip;
+
+            const { error: proError } = await supabase
+              .from('professionals')
+              .update(proUpdates)
+              .eq('id', ownProfessionalData.current.id);
+
+            if (proError) {
+              console.error('Settings professional save error:', proError);
+            }
+            ownProfessionalData.current = { ...ownProfessionalData.current, ...proUpdates };
+          }
+
+          showToast('Settings saved ✓');
+          console.log('Settings saved to Supabase:', { fullName, location, street, zip });
+        }
+
+        // Override Save Changes buttons
+        const buttons = settingsSection.querySelectorAll('button');
+        buttons.forEach(btn => {
+          const text = btn.textContent.trim().toLowerCase();
+          if (text.includes('save change') || text.includes('save address')) {
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              await saveSettingsToSupabase();
+            }, true); // use capture to fire before Rufplan's handler
+          }
+        });
+
+        // Load data into settings
+        loadSettingsFromSupabase();
+      }
+
+      // Watch for Settings page being shown
+      const settingsObserver = setInterval(() => {
+        const settingsSection = document.getElementById('db-section-settings');
+        if (settingsSection) {
+          overrideSettingsSave();
+        }
+      }, 2000);
+      setTimeout(() => clearInterval(settingsObserver), 120000);
 
     }, 800);
 
